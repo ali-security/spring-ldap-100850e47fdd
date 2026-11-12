@@ -1,14 +1,10 @@
 language: java
 
 jdk:
-  - openjdk8
+  - openjdk17
 
 os:
   - linux
-
-branches:
-  only:
-    - master
 
 before_cache:
   - rm -f $HOME/.gradle/caches/modules-2/modules-2.lock
@@ -17,4 +13,7 @@ cache:
     - $HOME/.gradle/caches/
     - $HOME/.gradle/wrapper/
 
-script: ./gradlew build
+script: ./gradlew build --console=plain --no-build-cache -I gradle/seal-test-summary.gradle
+
+after_script:
+  - sh .travis/wait-for-log.sh

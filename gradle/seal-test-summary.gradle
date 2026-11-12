@@ -1,0 +1,35 @@
+// Gradle init script used by CI (.travis.yml passes it with -I; the PR Build
+// workflow installs it into ~/.gradle/init.d). Gradle prints nothing for passing
+// tests, so print a line per test class, every skipped/failed test, per-task
+// totals, and the reason for each Test task that is disabled in its build file,
+// so the CI log states how many tests ran and passed.
+def disabledReasons = [
+    ':spring-ldap-integration-tests-openldap:test': 'needs a live OpenLDAP server on ldap://localhost:389 with the suite\'s directory data loaded',
+    ':spring-ldap-integration-tests-sunone:test': 'needs the live Sun ONE directory server at spring-ldap-test.dyndns.org:389',
+    ':spring-ldap-integration-tests-ad:test': 'needs a live Active Directory server on ldaps://127.0.0.1:13636',
+]
+gradle.taskGraph.whenReady { graph ->
+    graph.allTasks.findAll { it instanceof Test && !it.enabled }.each { t ->
+        def why = disabledReasons[t.path] ?: 'disabled in its build.gradle'
+        t.logger.lifecycle("SEAL SKIPPED TASK ${t.path}: disabled upstream by 'test.enabled = false' in ${t.project.projectDir.path - t.project.rootDir.path}/build.gradle; ${why}")
+    }
+}
+allprojects {
+    tasks.withType(Test).configureEach { t ->
+        t.afterTest { desc, result ->
+            if (result.resultType == TestResult.ResultType.SKIPPED) {
+                logger.lifecycle("SEAL SKIPPED: ${desc.className} > ${desc.name}")
+            } else if (result.resultType == TestResult.ResultType.FAILURE) {
+                logger.lifecycle("SEAL FAILED: ${desc.className} > ${desc.name}: ${result.exception}")
+            }
+        }
+        t.afterSuite { desc, result ->
+            if (desc.className != null && desc.name == desc.className) {
+                logger.lifecycle("SEAL CLASS ${desc.className}: tests=${result.testCount} passed=${result.successfulTestCount} failed=${result.failedTestCount} skipped=${result.skippedTestCount}")
+            }
+            if (desc.parent == null) {
+                logger.lifecycle("SEAL TEST SUMMARY ${t.path}: tests=${result.testCount} passed=${result.successfulTestCount} failed=${result.failedTestCount} skipped=${result.skippedTestCount} result=${result.resultType}")
+            }
+        }
+    }
+}
