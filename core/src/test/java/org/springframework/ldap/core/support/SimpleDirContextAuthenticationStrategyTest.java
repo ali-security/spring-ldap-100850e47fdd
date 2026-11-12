@@ -18,10 +18,13 @@ package org.springframework.ldap.core.support;
 import org.junit.Before;
 import org.junit.Test;
 
+import org.springframework.ldap.AuthenticationException;
+
 import javax.naming.Context;
 import java.util.Hashtable;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.fail;
 
 public class SimpleDirContextAuthenticationStrategyTest {
 	private SimpleDirContextAuthenticationStrategy tested;
@@ -49,5 +52,43 @@ public class SimpleDirContextAuthenticationStrategyTest {
 		assertThat(env.isEmpty()).isTrue();
 	}
 
+	@Test
+	public void setupEnvironmentWhenUserDnIsSetAndPasswordIsEmptyThenAuthenticationException() {
+		Hashtable<String, Object> env = new Hashtable<String, Object>();
+		try {
+			tested.setupEnvironment(env, "cn=John Doe", "");
+			fail("Expected AuthenticationException");
+		}
+		catch (AuthenticationException expected) {
+			// expected
+		}
+
+		// No unauthenticated bind credentials must have been applied.
+		assertThat(env.isEmpty()).isTrue();
+	}
+
+	@Test
+	public void setupEnvironmentWhenUserDnIsSetAndPasswordIsNullThenAuthenticationException() {
+		Hashtable<String, Object> env = new Hashtable<String, Object>();
+		try {
+			tested.setupEnvironment(env, "cn=John Doe", null);
+			fail("Expected AuthenticationException");
+		}
+		catch (AuthenticationException expected) {
+			// expected
+		}
+
+		assertThat(env.isEmpty()).isTrue();
+	}
+
+	@Test
+	public void setupEnvironmentWhenUserDnAndPasswordAreEmptyThenSucceeds() {
+		Hashtable<String, Object> env = new Hashtable<String, Object>();
+		tested.setupEnvironment(env, "", "");
+
+		assertThat(env.get(Context.SECURITY_AUTHENTICATION)).isEqualTo("simple");
+		assertThat(env.get(Context.SECURITY_PRINCIPAL)).isEqualTo("");
+		assertThat(env.get(Context.SECURITY_CREDENTIALS)).isEqualTo("");
+	}
 
 }

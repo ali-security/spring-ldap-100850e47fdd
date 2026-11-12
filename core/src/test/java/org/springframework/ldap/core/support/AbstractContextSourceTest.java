@@ -17,11 +17,17 @@
 package org.springframework.ldap.core.support;
 
 import org.junit.Test;
+import org.springframework.ldap.AuthenticationException;
 
+import javax.naming.Context;
 import javax.naming.InvalidNameException;
+import javax.naming.directory.DirContext;
 import javax.naming.ldap.LdapName;
+import java.util.Hashtable;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.fail;
+import static org.mockito.Mockito.mock;
 
 /**
  * @author Mattias Hellborg Arthursson
@@ -58,5 +64,94 @@ public class AbstractContextSourceTest {
 
         String result = AbstractContextSource.formatForUrl(ldapName);
         assertThat(result).isEqualTo("");
+    }
+
+    @Test
+    public void getContextWhenUserDnIsSetAndPasswordIsEmptyThenAuthenticationException() {
+        LdapContextSource tested = contextSource(null);
+        try {
+            tested.getContext("cn=admin", "");
+            fail("Expected AuthenticationException");
+        }
+        catch (AuthenticationException expected) {
+            // expected
+        }
+    }
+
+    @Test
+    public void getContextWhenUserDnIsSetAndPasswordIsNullThenAuthenticationException() {
+        LdapContextSource tested = contextSource(null);
+        try {
+            tested.getContext("cn=admin", null);
+            fail("Expected AuthenticationException");
+        }
+        catch (AuthenticationException expected) {
+            // expected
+        }
+    }
+
+    // Without the check the authenticated environment carries a userDn together with
+    // blank credentials, which an LDAP server interprets as an unauthenticated bind.
+    @Test
+    public void getAuthenticatedEnvWhenUserDnIsSetAndPasswordIsEmptyThenAuthenticationException() {
+        LdapContextSource tested = contextSource(null);
+        try {
+            Hashtable<String, Object> env = tested.getAuthenticatedEnv("cn=Some User", "");
+            fail("Expected AuthenticationException but got credentials "
+                    + env.get(Context.SECURITY_CREDENTIALS) + " for principal "
+                    + env.get(Context.SECURITY_PRINCIPAL));
+        }
+        catch (AuthenticationException expected) {
+            // expected
+        }
+    }
+
+    @Test
+    public void getAuthenticatedEnvWhenUserDnAndPasswordAreEmptyThenSucceeds() {
+        LdapContextSource tested = contextSource(null);
+        Hashtable<String, Object> env = tested.getAuthenticatedEnv("", "");
+
+        assertThat(env.get(Context.SECURITY_AUTHENTICATION)).isEqualTo("simple");
+        assertThat(env.get(Context.SECURITY_PRINCIPAL)).isEqualTo("");
+        assertThat(env.get(Context.SECURITY_CREDENTIALS)).isEqualTo("");
+    }
+
+    @Test
+    public void getContextWhenDigestMd5StrategyAndPasswordIsEmptyThenAuthenticationException() {
+        LdapContextSource tested = contextSource(new DigestMd5DirContextAuthenticationStrategy());
+        try {
+            tested.getContext("username", "");
+            fail("Expected AuthenticationException");
+        }
+        catch (AuthenticationException expected) {
+            // expected
+        }
+    }
+
+    // Certificate based authentication does not use the password at all.
+    @Test
+    public void getAuthenticatedEnvWhenExternalTlsStrategyAndPasswordIsEmptyThenSucceeds() {
+        LdapContextSource tested = contextSource(new ExternalTlsDirContextAuthenticationStrategy());
+        Hashtable<String, Object> env = tested.getAuthenticatedEnv("cn=Some User", "");
+
+        assertThat(env.get(Context.SECURITY_CREDENTIALS)).isNull();
+    }
+
+    private LdapContextSource contextSource(DirContextAuthenticationStrategy authenticationStrategy) {
+        final DirContext dirContextMock = mock(DirContext.class);
+        LdapContextSource contextSource = new LdapContextSource() {
+            @Override
+            protected DirContext createContext(Hashtable<String, Object> environment) {
+                return dirContextMock;
+            }
+        };
+        contextSource.setUrl("ldap://ldap.example.com:389");
+        contextSource.setUserDn("cn=service");
+        contextSource.setPassword("secret");
+        if (authenticationStrategy != null) {
+            contextSource.setAuthenticationStrategy(authenticationStrategy);
+        }
+        contextSource.afterPropertiesSet();
+        return contextSource;
     }
 }

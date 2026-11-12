@@ -19,6 +19,9 @@ import javax.naming.Context;
 import javax.naming.directory.DirContext;
 import java.util.Hashtable;
 
+import org.springframework.ldap.AuthenticationException;
+import org.springframework.util.StringUtils;
+
 /**
  * Authentication strategy for LDAP DIGEST-MD5 SASL mechanism.
  *
@@ -45,6 +48,10 @@ public class DigestMd5DirContextAuthenticationStrategy implements DirContextAuth
 	 * java.lang.String, java.lang.String)
 	 */
 	public void setupEnvironment(Hashtable<String, Object> env, String userDn, String password) {
+		if (StringUtils.hasLength(userDn) && !StringUtils.hasLength(password)) {
+			throw new AuthenticationException(
+					new javax.naming.AuthenticationException("password must be provided when userDn is set"));
+		}
 		env.put(Context.SECURITY_AUTHENTICATION, DIGEST_MD5_AUTHENTICATION);
 		// userDn should be a bare username for DIGEST-MD5
 		env.put(Context.SECURITY_PRINCIPAL, userDn);
